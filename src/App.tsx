@@ -14,7 +14,10 @@ export default function App() {
       <div className="bench">
         <aside className="plate">
           <p className="kicker">RobertKodes Lab · MK.I drum</p>
-          <h1>SLOTQUAKE</h1>
+          <h1>
+            SLOT
+            <span>QUAKE</span>
+          </h1>
           <p className="lede">
             Live Solana mainnet scratched onto continuous paper. Fees rumble. Failed
             signatures aftershock. Slots feed the drum.

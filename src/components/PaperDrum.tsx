@@ -1,13 +1,14 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 import { feedPixels, PaperRoll } from "../quake/paper";
-import { createNeedle, kickNeedle, needleAngleDeg, stepNeedle } from "../quake/physics";
+import { createNeedle, kickNeedle, stepNeedle } from "../quake/physics";
 import type { EngineBridge } from "../hooks/useQuake";
 
 const PAPER = "#eadcc3";
 const PAPER_IDLE = "#3f382f";
 const INK = "#1c1610";
 const RUST = "#a33c28";
-const GRID = "rgba(28, 22, 16, 0.14)";
+const BRASS = "#c9a45c";
+const GRID = "rgba(28, 22, 16, 0.16)";
 
 type Props = {
   bridge: MutableRefObject<EngineBridge>;
@@ -16,7 +17,6 @@ type Props = {
 
 export function PaperDrum({ bridge, armed }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const armRef = useRef<SVGGElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -27,14 +27,14 @@ export function PaperDrum({ bridge, armed }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const roll = new PaperRoll(1800);
+    const roll = new PaperRoll(2200);
     const needle = createNeedle();
     let raf = 0;
     let last = performance.now();
     let carry = 0;
     let spikeHold = 0;
+    let primed = false;
     const rng = mulberry(0x51e15);
-
     const grain = makeGrain();
 
     const resize = () => {
@@ -71,6 +71,11 @@ export function PaperDrum({ bridge, armed }: Props) {
         : stepNeedle(needle, dt, 0, 0, 0, true);
 
       if (live) {
+        if (!primed) {
+          const span = Math.max(80, Math.floor(wrap.clientWidth * 0.82));
+          for (let i = 0; i < span; i += 1) roll.push(0);
+          primed = true;
+        }
         const pxPerSec = feedPixels(b.drive.feed, reduced);
         carry += pxPerSec * dt;
         const isSpike = spikeHold > 0.18;
@@ -81,10 +86,6 @@ export function PaperDrum({ bridge, armed }: Props) {
       }
 
       paint(ctx, canvas, roll, y, live, grain, b.slot);
-      if (armRef.current) {
-        const deg = live ? needleAngleDeg(y) : 0;
-        armRef.current.setAttribute("transform", `rotate(${deg} 108 160)`);
-      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -96,21 +97,10 @@ export function PaperDrum({ bridge, armed }: Props) {
   }, [bridge]);
 
   return (
-    <div className={`drum ${armed ? "armed" : "idle"}`} ref={wrapRef}>
+    <div className={`drum ${armed ? "armed" : "idle"}`}>
       <div className="roller left" aria-hidden />
-      <div className="paper-well">
+      <div className="paper-well" ref={wrapRef}>
         <canvas ref={canvasRef} className="paper" />
-        <svg className="needle" viewBox="0 0 120 320" aria-hidden>
-          <g ref={armRef} transform="rotate(0 108 160)">
-            <line x1="108" y1="160" x2="8" y2="160" stroke="#5c4a3a" strokeWidth="2.2" />
-            <line x1="108" y1="160" x2="8" y2="160" stroke="#a33c28" strokeWidth="1.15" />
-            <rect x="70" y="152" width="22" height="16" rx="1" fill="#c9a45c" />
-            <circle cx="8" cy="160" r="4.2" fill="#1c1610" />
-            <circle cx="8" cy="160" r="1.6" fill="#a33c28" />
-            <circle cx="108" cy="160" r="9" fill="#c9a45c" />
-            <circle cx="108" cy="160" r="4.2" fill="#1a1713" />
-          </g>
-        </svg>
         {!armed && (
           <div className="paper-veil">
             <p>arm the drum</p>
@@ -143,7 +133,7 @@ function paint(
   ctx.fillStyle = armed ? PAPER : PAPER_IDLE;
   ctx.fillRect(0, 0, w, h);
 
-  ctx.globalAlpha = armed ? 0.11 : 0.05;
+  ctx.globalAlpha = armed ? 0.22 : 0.08;
   for (let x = 0; x < w; x += grain.width) {
     for (let yy = 0; yy < h; yy += grain.height) {
       ctx.drawImage(grain, x, yy);
@@ -155,6 +145,10 @@ function paint(
   const amp = h * 0.36;
   const top = 16;
   const bot = h - 16;
+  const needleX = w * 0.84;
+  const pivotX = w - 18;
+  const pivotY = mid;
+  const ny = mid - y * amp;
 
   ctx.fillStyle = armed ? "#0c0b09" : "#1a1713";
   for (let x = 10; x < w; x += 13) {
@@ -172,52 +166,131 @@ function paint(
   ctx.moveTo(0, mid);
   ctx.lineTo(w, mid);
   ctx.stroke();
+  ctx.setLineDash([2, 10]);
   ctx.beginPath();
   ctx.moveTo(0, mid - amp);
   ctx.lineTo(w, mid - amp);
   ctx.moveTo(0, mid + amp);
   ctx.lineTo(w, mid + amp);
   ctx.stroke();
+  ctx.setLineDash([]);
 
-  const needleX = w * 0.78;
+  ctx.strokeStyle = "rgba(28,22,16,0.08)";
+  for (let x = needleX; x > 8; x -= 72) {
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bot);
+    ctx.stroke();
+  }
+
   const n = roll.filled;
   if (n > 1) {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.lineWidth = 1.45;
-    let drawing = false;
-    let rust = false;
+    ctx.lineWidth = 1.55;
+    ctx.strokeStyle = INK;
+    ctx.beginPath();
+    let started = false;
     for (let i = 0; i < n; i += 1) {
       const s = roll.chronological(i);
       const x = needleX - (n - 1 - i);
       if (x < 4 || x > w - 4) continue;
       const py = mid - s.y * amp;
-      if (s.spike !== rust || !drawing) {
-        if (drawing) ctx.stroke();
-        rust = s.spike;
-        ctx.strokeStyle = rust ? RUST : INK;
-        ctx.beginPath();
+      if (!started) {
         ctx.moveTo(x, py);
-        drawing = true;
+        started = true;
       } else {
         ctx.lineTo(x, py);
       }
     }
-    if (drawing) ctx.stroke();
+    if (started) {
+      ctx.lineTo(needleX, ny);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = RUST;
+    ctx.lineWidth = 1.7;
+    started = false;
+    for (let i = 0; i < n; i += 1) {
+      const s = roll.chronological(i);
+      const x = needleX - (n - 1 - i);
+      if (x < 4 || x > w - 4) continue;
+      const py = mid - s.y * amp;
+      if (s.spike) {
+        if (!started) {
+          ctx.beginPath();
+          ctx.moveTo(x, py);
+          started = true;
+        } else {
+          ctx.lineTo(x, py);
+        }
+      } else if (started) {
+        ctx.stroke();
+        started = false;
+      }
+    }
+    if (started) ctx.stroke();
   }
 
-  const ny = mid - y * amp;
-  ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.arc(needleX, ny, 2.1, 0, Math.PI * 2);
-  ctx.fill();
+  drawBoom(ctx, pivotX, pivotY, needleX, ny, armed);
 
   if (armed && slot > 0) {
-    ctx.fillStyle = "rgba(28,22,16,0.35)";
+    ctx.fillStyle = "rgba(28,22,16,0.38)";
     ctx.font = "500 10px 'Azeret Mono', monospace";
     ctx.fillText(String(slot), 18, bot - 4);
-    ctx.fillText("mm", 18, top + 12);
+    ctx.fillText("+", 14, mid - amp + 10);
+    ctx.fillText("−", 14, mid + amp - 4);
   }
+}
+
+function drawBoom(
+  ctx: CanvasRenderingContext2D,
+  pivotX: number,
+  pivotY: number,
+  nibX: number,
+  nibY: number,
+  armed: boolean,
+) {
+  ctx.save();
+  ctx.strokeStyle = armed ? "#5c4a3a" : "#3a342c";
+  ctx.lineWidth = 2.6;
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(nibX, nibY);
+  ctx.stroke();
+  ctx.strokeStyle = armed ? RUST : "#4a4032";
+  ctx.lineWidth = 1.15;
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(nibX, nibY);
+  ctx.stroke();
+
+  const wx = pivotX + (nibX - pivotX) * 0.32;
+  const wy = pivotY + (nibY - pivotY) * 0.32;
+  ctx.fillStyle = BRASS;
+  ctx.fillRect(wx - 10, wy - 6, 20, 12);
+  ctx.strokeStyle = "#6a5424";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(wx - 10, wy - 6, 20, 12);
+
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, 8.5, 0, Math.PI * 2);
+  ctx.fillStyle = BRASS;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, 3.6, 0, Math.PI * 2);
+  ctx.fillStyle = "#1a1713";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(nibX, nibY, 3.4, 0, Math.PI * 2);
+  ctx.fillStyle = INK;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(nibX, nibY, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = RUST;
+  ctx.fill();
+  ctx.restore();
 }
 
 function makeGrain(): HTMLCanvasElement {
@@ -228,11 +301,11 @@ function makeGrain(): HTMLCanvasElement {
   if (!g) return c;
   const img = g.createImageData(128, 128);
   for (let i = 0; i < img.data.length; i += 4) {
-    const n = 180 + Math.floor(Math.random() * 70);
+    const n = 160 + Math.floor(Math.random() * 85);
     img.data[i] = n;
-    img.data[i + 1] = n - 12;
-    img.data[i + 2] = n - 28;
-    img.data[i + 3] = 90;
+    img.data[i + 1] = n - 14;
+    img.data[i + 2] = n - 32;
+    img.data[i + 3] = 110;
   }
   g.putImageData(img, 0, 0);
   return c;
