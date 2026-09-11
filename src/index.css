@@ -1,0 +1,58 @@
+:root {
+  --void: #0c0b09;
+  --chassis: #1a1713;
+  --paper: #eadcc3;
+  --ink: #1c1610;
+  --rust: #a33c28;
+  --brass: #c9a45c;
+  --steel: #2c2822;
+  --display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --body: "Source Serif 4", Georgia, serif;
+  --mono: "Azeret Mono", ui-monospace, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  background: var(--void);
+}
+
+body {
+  margin: 0;
+  color: var(--paper);
+  font-family: var(--body);
+  background:
+    radial-gradient(1200px 700px at 12% -10%, #2a2218 0%, transparent 55%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(201, 164, 92, 0.03) 0 1px,
+      transparent 1px 7px
+    ),
+    var(--void);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.08s !important;
+  }
+}
